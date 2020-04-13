@@ -1,24 +1,26 @@
 package engine
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/baetyl/baetyl-core/config"
-	"github.com/baetyl/baetyl-core/event"
 	"github.com/baetyl/baetyl-core/mock"
-	"github.com/baetyl/baetyl-core/shadow"
+	"github.com/baetyl/baetyl-core/node"
 	"github.com/baetyl/baetyl-core/store"
+	"github.com/baetyl/baetyl-go/log"
 	v1 "github.com/baetyl/baetyl-go/spec/v1"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"os"
-	"testing"
-	"time"
 )
 
-func prepare(t *testing.T) (*shadow.Shadow, *event.Center, config.EngineConfig) {
+func prepare(t *testing.T) (*node.Node, config.EngineConfig) {
+	log.Init(log.Config{Level: "debug"})
+
 	f, err := ioutil.TempFile("", t.Name())
 	assert.NoError(t, err)
 	assert.NotNil(t, f)
@@ -28,166 +30,135 @@ func prepare(t *testing.T) (*shadow.Shadow, *event.Center, config.EngineConfig) 
 	assert.NoError(t, err)
 	assert.NotNil(t, sto)
 
-	sha, err := shadow.NewShadow(t.Name(), t.Name(), sto)
+	no, err := node.NewNode(sto)
 	assert.NoError(t, err)
-	assert.NotNil(t, sha)
+	assert.NotNil(t, no)
 
-	cent, err := event.NewCenter(sto, 2)
-	assert.NoError(t, err)
-	assert.NotNil(t, cent)
-
-	cfg := config.EngineConfig{
-		Kind: "kubernetes",
-	}
-	cfg.Collector.Interval = time.Second
-	return sha, cent, cfg
+	cfg := config.EngineConfig{}
+	cfg.Kind = "kubernetes"
+	cfg.Report.Interval = time.Second
+	return no, cfg
 }
 
-func TestReport(t *testing.T) {
-	sha, cent, cfg := prepare(t)
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
-	mockAmi := mock.NewMockAMI(mockCtl)
-	r := v1.Report{
-		"apps": []interface{}{
-			map[string]string{
-				"name":    "app",
-				"version": "v1",
-			},
-		},
-	}
-	mockAmi.EXPECT().Collect().Return(r, nil)
-
-	wrongCfg := cfg
-	wrongCfg.Kind = ""
-	_, err := NewEngine(wrongCfg, mockAmi, sha, cent)
+func TestEngine(t *testing.T) {
+	eng, err := NewEngine(config.EngineConfig{}, nil, nil)
 	assert.Error(t, err, os.ErrInvalid.Error())
-
-	engine, err := NewEngine(cfg, mockAmi, sha, cent)
-	assert.NoError(t, err)
-
-	_, err = sha.Desire(v1.Desire{
-		"apps": []interface{}{
-			map[string]string{
-				"name":    "app",
-				"version": "v1",
-			},
-		},
-	})
-	assert.NoError(t, err)
-	syn := mockSync{msgs: make(chan *event.Event, 1)}
-	err = engine.cent.Register(event.SyncReportEvent, syn.report)
-	cent.Start()
-	engine.collect()
-	assert.NoError(t, err)
-	pld, _ := json.Marshal(r)
-	expected := event.NewEvent(event.SyncReportEvent, pld)
-	var msg *event.Event
-	select {
-	case msg = <-syn.msgs:
-	}
-	assert.Equal(t, msg.Payload, expected.Payload)
-	engine.Close()
+	assert.Nil(t, eng)
 }
 
-type mockSync struct {
-	msgs chan *event.Event
-}
-
-func (s *mockSync) report(msg *event.Event) error {
-	s.msgs <- msg
-	return nil
-}
-
-func (s *mockSync) desire(msg *event.Event) error {
-	s.msgs <- msg
-	return nil
-}
-
-func TestDesire(t *testing.T) {
-	sha, cent, cfg := prepare(t)
+func TestEngineReport(t *testing.T) {
+	nod, cfg := prepare(t)
 	mockCtl := gomock.NewController(t)
 	defer mockCtl.Finish()
 	mockAmi := mock.NewMockAMI(mockCtl)
-	r := v1.Report{
-		"apps": []interface{}{
-			map[string]string{
-				"name":    "app",
-				"version": "v1",
-			},
-		},
-	}
-	mockAmi.EXPECT().Collect().Return(r, nil)
-
-	engine, err := NewEngine(cfg, mockAmi, sha, cent)
-	assert.NoError(t, err)
-
-	d := v1.Desire{
-		"apps": []interface{}{
-			map[string]string{
-				"name":    "app",
-				"version": "v2",
-			},
-		},
-	}
-	_, err = sha.Desire(d)
-	assert.NoError(t, err)
-	syn := mockSync{msgs: make(chan *event.Event, 1)}
-	err = engine.cent.Register(event.SyncDesireEvent, syn.desire)
-	cent.Start()
-	engine.collect()
-	assert.NoError(t, err)
-	pld, _ := json.Marshal(d)
-	expected := event.NewEvent(event.SyncReportEvent, pld)
-	var msg *event.Event
-	select {
-	case msg = <-syn.msgs:
-	}
-	assert.Equal(t, msg.Payload, expected.Payload)
-	engine.Close()
-}
-
-func TestApply(t *testing.T) {
-	sha, cent, cfg := prepare(t)
-	mockCtl := gomock.NewController(t)
-	defer mockCtl.Finish()
-	mockAmi := mock.NewMockAMI(mockCtl)
-	mockAmi.EXPECT().Apply(gomock.Any()).Return(nil)
-	engine, err := NewEngine(cfg, mockAmi, sha, cent)
-	assert.NoError(t, err)
-
-	e := event.NewEvent("", []byte{})
-	err = engine.Apply(e)
-	assert.Error(t, err)
-
-	wrongInfo := v1.Desire{
+	r0 := v1.Report{
 		"apps": []interface{}{},
 	}
-	pld, _ := json.Marshal(wrongInfo)
-	e = event.NewEvent("", pld)
-	err = engine.Apply(e)
-	assert.Error(t, err)
-
-	info := v1.Desire{
-		"apps": []interface{}{
-			map[string]string{
-				"name":    "app",
-				"version": "v1",
-			},
-		},
+	r1 := v1.Report{
+		"apps": []v1.AppInfo{{Name: "app", Version: "v1"}},
 	}
-	pld, _ = json.Marshal(info)
-	e = event.NewEvent("", pld)
-	err = engine.Apply(e)
-	assert.NoError(t, err)
-	engine.Close()
+	r2 := v1.Report{
+		"apps": []v1.AppInfo{{Name: "app", Version: "v2"}},
+	}
+	ns := "baetyl-edge"
+	var wg sync.WaitGroup
+	wg.Add(1)
+	gomock.InOrder(
+		mockAmi.EXPECT().Collect(gomock.Any()).Return(nil, nil).Times(1),
+		mockAmi.EXPECT().Collect(gomock.Any()).DoAndReturn(func(ns string) (v1.Report, error) {
+			fmt.Println("1")
+			_, err := nod.Desire(v1.Desire(r0))
+			assert.NoError(t, err)
+			return r1, nil
+		}).Times(1),
+		mockAmi.EXPECT().Apply(gomock.Any(), gomock.Any()).DoAndReturn(func(ns string, apps []v1.AppInfo) error {
+			fmt.Println("2", apps)
+			sd, err := nod.Get()
+			assert.NoError(t, err)
+			assert.Len(t, sd.Desire.AppInfos(), 0)
+			return nil
+		}).Times(1),
+		mockAmi.EXPECT().Collect(gomock.Any()).DoAndReturn(func(ns string) (v1.Report, error) {
+			fmt.Println("3")
+			_, err := nod.Desire(v1.Desire(r1))
+			assert.NoError(t, err)
+			return r1, nil
+		}).Times(1),
+		mockAmi.EXPECT().Collect(gomock.Any()).DoAndReturn(func(ns string) (v1.Report, error) {
+			fmt.Println("4")
+			_, err := nod.Desire(v1.Desire(r2))
+			assert.NoError(t, err)
+			return r1, nil
+		}).Times(1),
+		mockAmi.EXPECT().Apply(gomock.Any(), gomock.Any()).DoAndReturn(func(ns string, apps []v1.AppInfo) error {
+			fmt.Println("5", apps)
+			defer wg.Done()
+			sd, err := nod.Get()
+			assert.NoError(t, err)
+			assert.Equal(t, "v2", sd.Desire.AppInfos()[0].Version)
+			return nil
+		}).Times(1),
+	)
 
-	err1 := errors.New("failed to apply")
-	mockAmi.EXPECT().Apply(gomock.Any()).Return(err1)
-	pld, _ = json.Marshal(info)
-	e = event.NewEvent("", pld)
-	err = engine.Apply(e)
-	assert.Error(t, err, err1.Error())
-	engine.Close()
+	e := &Engine{
+		nod: nod,
+		ami: mockAmi,
+		cfg: cfg,
+		ns:  ns,
+		log: log.With(log.Any("engine", cfg.Kind)),
+	}
+	e.tomb.Go(e.reporting)
+	defer e.Close()
+	wg.Wait()
+}
 
+func TestSortApp(t *testing.T) {
+	var reApps []v1.AppInfo
+	var deApps []v1.AppInfo
+	res := alignApps(reApps, deApps)
+	assert.Equal(t, res, reApps)
+
+	reApps = nil
+	deApps = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, reApps)
+
+	reApps = []v1.AppInfo{}
+	deApps = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, reApps)
+
+	reApps = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	deApps = nil
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, reApps)
+
+	reApps = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	deApps = []v1.AppInfo{}
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, reApps)
+
+	reApps = []v1.AppInfo{{Name: "a", Version: "a1"}, {Name: "b", Version: "b1"}}
+	deApps = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	expected := []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, expected)
+
+	reApps = []v1.AppInfo{{Name: "a", Version: "a1"}, {Name: "b", Version: "b1"}}
+	deApps = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "c", Version: "c1"}, {Name: "a", Version: "a1"}}
+	expected = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, expected)
+
+	reApps = []v1.AppInfo{{Name: "d", Version: "d1"}, {Name: "a", Version: "a1"}, {Name: "b", Version: "b1"}}
+	deApps = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	expected = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}, {Name: "d", Version: "d1"}}
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, expected)
+
+	reApps = []v1.AppInfo{{Name: "a", Version: "a1"}, {Name: "d", Version: "d1"}, {Name: "b", Version: "b1"}}
+	deApps = []v1.AppInfo{{Name: "c", Version: "c1"}, {Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}}
+	expected = []v1.AppInfo{{Name: "b", Version: "b1"}, {Name: "a", Version: "a1"}, {Name: "d", Version: "d1"}}
+	res = alignApps(reApps, deApps)
+	assert.Equal(t, res, expected)
 }

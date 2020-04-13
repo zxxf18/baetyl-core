@@ -15,6 +15,10 @@ import (
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1beta1"
 )
 
+const (
+	KubeNodeName = "KUBE_NODE_NAME"
+)
+
 type kubeImpl struct {
 	knn   string // kube node name
 	cli   *Client
@@ -28,7 +32,7 @@ func NewKubeImpl(cfg config.KubernetesConfig, sto *bh.Store) (AMI, error) {
 	if err != nil {
 		return nil, err
 	}
-	knn := os.Getenv("KUBE_NODE_NAME")
+	knn := os.Getenv(KubeNodeName)
 	model := &kubeImpl{
 		cli:   cli,
 		store: sto,
@@ -39,10 +43,9 @@ func NewKubeImpl(cfg config.KubernetesConfig, sto *bh.Store) (AMI, error) {
 }
 
 type Client struct {
-	Namespace string
-	Core      corev1.CoreV1Interface
-	App       appv1.AppsV1Interface
-	Metrics   metricsv1beta1.MetricsV1beta1Interface
+	Core    corev1.CoreV1Interface
+	App     appv1.AppsV1Interface
+	Metrics metricsv1beta1.MetricsV1beta1Interface
 }
 
 func newClient(cfg config.KubernetesConfig) (*Client, error) {
@@ -67,9 +70,8 @@ func newClient(cfg config.KubernetesConfig) (*Client, error) {
 		return nil, err
 	}
 	return &Client{
-		Core:      kubeClient.CoreV1(),
-		App:       kubeClient.AppsV1(),
-		Metrics:   metricsCli.MetricsV1beta1(),
-		Namespace: "baetyl-edge",
+		Core:    kubeClient.CoreV1(),
+		App:     kubeClient.AppsV1(),
+		Metrics: metricsCli.MetricsV1beta1(),
 	}, nil
 }

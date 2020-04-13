@@ -3,22 +3,22 @@ package sync
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/baetyl/baetyl-core/config"
-	"github.com/baetyl/baetyl-core/event"
-	"github.com/baetyl/baetyl-core/shadow"
+	"github.com/baetyl/baetyl-core/node"
 	"github.com/baetyl/baetyl-core/store"
 	"github.com/baetyl/baetyl-go/mock"
 	"github.com/baetyl/baetyl-go/spec/crd"
 	specv1 "github.com/baetyl/baetyl-go/spec/v1"
 	"github.com/baetyl/baetyl-go/utils"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
-func TestMakeKey(t *testing.T) {
+func TestSyncMakeKey(t *testing.T) {
 	key := makeKey(crd.KindApplication, "app", "a1")
 	expected := "application-app-a1"
 	assert.Equal(t, key, expected)
@@ -26,7 +26,7 @@ func TestMakeKey(t *testing.T) {
 	assert.Equal(t, key, "")
 }
 
-func TestStore(t *testing.T) {
+func TestSyncStore(t *testing.T) {
 	f, err := ioutil.TempFile("", t.Name())
 	assert.NoError(t, err)
 	assert.NotNil(t, f)
@@ -64,7 +64,7 @@ func TestStore(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestCleanDir(t *testing.T) {
+func TestSyncCleanDir(t *testing.T) {
 	dir, err := ioutil.TempDir("", t.Name())
 	assert.NoError(t, err)
 	assert.NotNil(t, dir)
@@ -86,7 +86,7 @@ func TestCleanDir(t *testing.T) {
 	assert.False(t, file1Exist)
 }
 
-func TestProcessConfiguration(t *testing.T) {
+func TestSyncProcessConfiguration(t *testing.T) {
 	f, err := ioutil.TempFile("", t.Name())
 	assert.NoError(t, err)
 	assert.NotNil(t, f)
@@ -107,7 +107,7 @@ func TestProcessConfiguration(t *testing.T) {
 	sc.Cloud.HTTP.Key = "./testcert/client.key"
 	sc.Cloud.HTTP.Cert = "./testcert/client.pem"
 	sc.Cloud.HTTP.InsecureSkipVerify = true
-	syn, err := NewSync(sc, sto, nil, nil)
+	syn, err := NewSync(sc, sto, nil)
 	assert.NoError(t, err)
 
 	volume := &crd.Volume{
@@ -157,7 +157,7 @@ func TestProcessConfiguration(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func Test_Desire(t *testing.T) {
+func TestSyncResources(t *testing.T) {
 	f, err := ioutil.TempFile("", t.Name())
 	assert.NoError(t, err)
 	assert.NotNil(t, f)
@@ -167,13 +167,9 @@ func Test_Desire(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, sto)
 
-	sha, err := shadow.NewShadow(t.Name(), t.Name(), sto)
+	nod, err := node.NewNode(sto)
 	assert.NoError(t, err)
-	assert.NotNil(t, sha)
-
-	cent, err := event.NewCenter(sto, 2)
-	assert.NoError(t, err)
-	assert.NotNil(t, cent)
+	assert.NotNil(t, nod)
 
 	appName := "test-app"
 	appVer := "v1"
@@ -253,21 +249,9 @@ func Test_Desire(t *testing.T) {
 	sc.Cloud.HTTP.Key = "./testcert/client.key"
 	sc.Cloud.HTTP.Cert = "./testcert/client.pem"
 	sc.Cloud.HTTP.InsecureSkipVerify = true
-	syn, err := NewSync(sc, sto, sha, cent)
+	syn, err := NewSync(sc, sto, nod)
 	assert.NoError(t, err)
-	e := &event.Event{}
-	desire := specv1.Desire{
-		"apps": []interface{}{
-			map[string]interface{}{
-				"name":    "desire-app",
-				"version": "v1",
-			},
-		},
-	}
-	e.Payload, _ = json.Marshal(desire)
-	err = syn.Desire(e)
-	assert.NoError(t, err)
-
+	err = syn.syncResources([]specv1.AppInfo{specv1.AppInfo{Name: "desire-app", Version: "v1"}})
 	var appRes crd.Application
 	err = sto.Get(makeKey(crd.KindApplication, appName, appVer), &appRes)
 	assert.NoError(t, err)
@@ -291,13 +275,9 @@ func Test_Desire(t *testing.T) {
 	sc.Cloud.HTTP.Key = "./testcert/client.key"
 	sc.Cloud.HTTP.Cert = "./testcert/client.pem"
 	sc.Cloud.HTTP.InsecureSkipVerify = true
-	syn, err = NewSync(sc, sto, sha, cent)
+	syn, err = NewSync(sc, sto, nod)
 	assert.NoError(t, err)
-	desire = specv1.Desire{
-		"apps": []interface{}{},
-	}
-	e.Payload, _ = json.Marshal(desire)
-	err = syn.Desire(e)
-	assert.Error(t, err)
+	err = syn.syncResources([]specv1.AppInfo{})
+	assert.NoError(t, err)
 	ms.Close()
 }
