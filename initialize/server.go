@@ -3,9 +3,9 @@ package initialize
 import (
 	"github.com/baetyl/baetyl-core/config"
 	"github.com/baetyl/baetyl-go/log"
+	"github.com/baetyl/baetyl-go/utils"
 	"html/template"
 	"net/http"
-	"os"
 )
 
 func (init *Initialize) startServer() error {
@@ -65,7 +65,7 @@ func (init *Initialize) handleUpdate(w http.ResponseWriter, req *http.Request) {
 	var tpl *template.Template
 	page := "/success.html.template"
 	init.activate()
-	if _, err := os.Stat(init.cfg.Sync.Cloud.HTTP.Cert); os.IsNotExist(err) {
+	if !utils.FileExists(init.cfg.Sync.Cloud.HTTP.Cert) {
 		page = "/failed.html.template"
 	}
 	tpl, err = template.ParseFiles(init.cfg.Init.ActivateConfig.Server.Pages + page)
