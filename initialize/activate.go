@@ -14,13 +14,13 @@ import (
 )
 
 func (init *Initialize) activating() error {
-	init.Activate()
+	init.activate()
 	t := time.NewTicker(init.cfg.Init.Cloud.Active.Interval)
 	defer t.Stop()
 	for {
 		select {
 		case <-t.C:
-			init.Activate()
+			init.activate()
 		case <-init.tomb.Dying():
 			return nil
 		}
@@ -28,7 +28,7 @@ func (init *Initialize) activating() error {
 }
 
 // Report reports info
-func (init *Initialize) Activate() {
+func (init *Initialize) activate() {
 	info := v1.ActiveRequest{
 		BatchName:     init.batch.name,
 		Namespace:     init.batch.namespace,
@@ -72,8 +72,6 @@ func (init *Initialize) Activate() {
 		return
 	}
 
-	init.cfg.Sync.Node.Name = res.NodeName
-	init.cfg.Sync.Node.Namespace = res.Namespace
 	if err := init.genCert(res.Certificate); err != nil {
 		init.log.Error("error to create cert file", log.Error(err))
 		return

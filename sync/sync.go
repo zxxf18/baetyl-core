@@ -16,7 +16,7 @@ import (
 )
 
 // ErrSyncTLSConfigMissing certificate bidirectional authentication is required for connection with cloud
-var ErrSyncTLSConfigMissing = errors.New("Certificate bidirectional authentication is required for connection with cloud")
+var ErrSyncTLSConfigMissing = errors.New("certificate bidirectional authentication is required for connection with cloud")
 
 // Sync sync shadow and resources with cloud
 type Sync struct {
@@ -46,8 +46,37 @@ func NewSync(cfg config.SyncConfig, store *bh.Store, nod *node.Node) (*Sync, err
 		fifo:  make(chan v1.Desire, 1),
 		log:   log.With(log.Any("core", "sync")),
 	}
-	s.tomb.Go(s.reporting, s.desiring)
 	return s, nil
+}
+
+func (s *Sync) Loop() {
+	s.tomb.Go(s.reporting, s.desiring)
+}
+
+func (s *Sync) Close() {
+	s.tomb.Kill(nil)
+	s.tomb.Wait()
+}
+
+func (s *Sync) Once() error {
+	desire, err := s.doReport()
+	if err != nil {
+		return err
+	}
+	if len(desire) == 0 {
+		return nil
+	}
+
+	err = s.syncResources(desire.AppInfos())
+	if err != nil {
+		return err
+	}
+	_, err = s.nod.Desire(desire)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Sync) reporting() error {
@@ -73,20 +102,7 @@ func (s *Sync) reporting() error {
 }
 
 func (s *Sync) report() error {
-	sd, err := s.nod.Get()
-	if err != nil {
-		return err
-	}
-	pld, err := json.Marshal(sd.Report)
-	if err != nil {
-		return err
-	}
-	data, err := s.http.PostJSON(s.cfg.Cloud.Report.URL, pld)
-	if err != nil {
-		return err
-	}
-	var desire v1.Desire
-	err = json.Unmarshal(data, &desire)
+	desire, err := s.doReport()
 	if err != nil {
 		return err
 	}
@@ -102,6 +118,27 @@ func (s *Sync) report() error {
 	case <-s.tomb.Dying():
 	}
 	return nil
+}
+
+func (s *Sync) doReport() (v1.Desire, error) {
+	sd, err := s.nod.Get()
+	if err != nil {
+		return nil, err
+	}
+	pld, err := json.Marshal(sd.Report)
+	if err != nil {
+		return nil, err
+	}
+	data, err := s.http.PostJSON(s.cfg.Cloud.Report.URL, pld)
+	if err != nil {
+		return nil, err
+	}
+	var desire v1.Desire
+	err = json.Unmarshal(data, &desire)
+	if err != nil {
+		return nil, err
+	}
+	return desire, nil
 }
 
 func (s *Sync) desiring() error {

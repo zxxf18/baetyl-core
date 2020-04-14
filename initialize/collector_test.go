@@ -2,7 +2,7 @@ package initialize
 
 import (
 	"fmt"
-	"github.com/baetyl/baetyl-core/config"
+	"github.com/baetyl/baetyl-core/initialize/config"
 	mc "github.com/baetyl/baetyl-core/mock"
 	v1 "github.com/baetyl/baetyl-go/spec/v1"
 	"github.com/golang/mock/gomock"
@@ -79,13 +79,16 @@ func TestInitialize_Activate_Err_Collector(t *testing.T) {
 	mockCtl := gomock.NewController(t)
 	defer mockCtl.Finish()
 
+	c := &config.Config{}
+	c.Engine.Kind = "kubernetes"
+	c.Engine.Kubernetes.InCluster = true
+	c.Init.Cloud.Active.Interval = 5 * time.Second
+
 	ami := mc.NewMockAMI(mockCtl)
 	ami.EXPECT().Collect(gomock.Any()).Return(inspect, nil).AnyTimes()
+	init := genInit(t, c, ami)
 
-	c := &config.Config{}
-	c.Init.Cloud.Active.Interval = 5 * time.Second
-	init, err := NewInit(c, ami)
-	assert.Nil(t, err)
+	init.Start()
 	init.Close()
 
 	for _, tt := range collectorBadCases {
@@ -111,8 +114,7 @@ func TestInitialize_Activate_Err_Ami(t *testing.T) {
 	c := &config.Config{}
 	c.Init.Cloud.Active.Interval = 5 * time.Second
 	c.Init.ActivateConfig.Fingerprints = collectorBadCases[0].fingerprints
-	init, err := NewInit(c, ami)
-	assert.Nil(t, err)
-	_, err = init.collect()
+	init := genInit(t, c, ami)
+	_, err := init.collect()
 	assert.NotNil(t, err)
 }

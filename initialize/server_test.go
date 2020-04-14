@@ -1,7 +1,7 @@
 package initialize
 
 import (
-	"github.com/baetyl/baetyl-core/config"
+	"github.com/baetyl/baetyl-core/initialize/config"
 	mc "github.com/baetyl/baetyl-core/mock"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -117,8 +117,8 @@ func TestServer(t *testing.T) {
 	defer mockCtl.Finish()
 	ami := mc.NewMockAMI(mockCtl)
 
-	init, err := NewInit(c, ami)
-	assert.Nil(t, err)
+	init := genInit(t, c, ami)
+	init.Start()
 
 	w := &httptest.ResponseRecorder{
 		Code:    http.StatusOK,

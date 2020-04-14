@@ -39,8 +39,15 @@ func NewEngine(cfg config.EngineConfig, sto *bh.Store, nod *node.Node) (*Engine,
 		ns:  "baetyl-edge",
 		log: log.With(log.Any("engine", cfg.Kind)),
 	}
-	e.tomb.Go(e.reporting)
 	return e, nil
+}
+
+func (e *Engine) Loop() {
+	e.tomb.Go(e.reporting)
+}
+
+func (e *Engine) Once() error {
+	return e.report()
 }
 
 func (e *Engine) reporting() error {

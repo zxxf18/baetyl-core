@@ -2,15 +2,21 @@ package initialize
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/baetyl/baetyl-core/ami"
+	"github.com/baetyl/baetyl-core/store"
+	"github.com/baetyl/baetyl-go/log"
 	"io/ioutil"
-	"net/http"
+	gohttp "net/http"
 	"os"
 	"path"
 	"testing"
 	"time"
 
-	"github.com/baetyl/baetyl-core/config"
+	coreConfig "github.com/baetyl/baetyl-core/config"
+	"github.com/baetyl/baetyl-core/initialize/config"
 	mc "github.com/baetyl/baetyl-core/mock"
+	"github.com/baetyl/baetyl-go/http"
 	"github.com/baetyl/baetyl-go/mock"
 	v1 "github.com/baetyl/baetyl-go/spec/v1"
 	"github.com/baetyl/baetyl-go/utils"
@@ -95,6 +101,29 @@ var (
 	}
 )
 
+func genInit(t *testing.T, cfg *config.Config, ami ami.AMI) *Initialize {
+	ops, err := cfg.Init.Cloud.HTTP.ToClientOptions()
+	assert.Nil(t, err)
+	init := &Initialize{
+		cfg:   cfg,
+		sig:   make(chan bool, 1),
+		http:  http.NewClient(ops),
+		attrs: map[string]string{},
+		ami:   ami,
+		log:   log.With(log.Any("core", "Initialize")),
+	}
+	init.batch = &batch{
+		name:         cfg.Init.Batch.Name,
+		namespace:    cfg.Init.Batch.Namespace,
+		securityType: cfg.Init.Batch.SecurityType,
+		securityKey:  cfg.Init.Batch.SecurityKey,
+	}
+	for _, a := range cfg.Init.ActivateConfig.Attributes {
+		init.attrs[a.Name] = a.Value
+	}
+	return init
+}
+
 func TestInitialize_Activate(t *testing.T) {
 	data, err := json.Marshal(resp)
 	assert.NoError(t, err)
@@ -125,7 +154,7 @@ func TestInitialize_Activate(t *testing.T) {
 	}
 
 	certPath := "var/lib/baetyl/cert"
-	is := &config.SyncConfig{}
+	is := &coreConfig.SyncConfig{}
 	err = utils.UnmarshalYAML(nil, is)
 	assert.NoError(t, err)
 	is.Cloud.HTTP.Key = path.Join(certPath, "client.key")
@@ -154,6 +183,15 @@ func TestInitialize_Activate(t *testing.T) {
 		},
 	}
 
+	f, err := ioutil.TempFile("", t.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, f)
+	fmt.Println("-->tempfile", f.Name())
+
+	sto, err := store.NewBoltHold(f.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, sto)
+
 	mockCtl := gomock.NewController(t)
 	defer mockCtl.Finish()
 	ami := mc.NewMockAMI(mockCtl)
@@ -167,12 +205,9 @@ func TestInitialize_Activate(t *testing.T) {
 
 	for _, tt := range goodCases {
 		t.Run(tt.name, func(t *testing.T) {
-			c.Sync.Node.Name = ""
-			c.Sync.Node.Namespace = ""
 			c.Init.ActivateConfig.Fingerprints = tt.fingerprints
-
-			init, err := NewInit(c, ami)
-			assert.Nil(t, err)
+			init := genInit(t, c, ami)
+			init.Start()
 			init.WaitAndClose()
 			responseEqual(t, *tt.want, c.Sync)
 		})
@@ -212,21 +247,46 @@ func TestInitialize_Activate_Err_Response(t *testing.T) {
 		},
 	}
 
+	f, err := ioutil.TempFile("", t.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, f)
+	fmt.Println("-->tempfile", f.Name())
+
+	sto, err := store.NewBoltHold(f.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, sto)
+
 	mockCtl := gomock.NewController(t)
 	defer mockCtl.Finish()
 	ami := mc.NewMockAMI(mockCtl)
 	ami.EXPECT().Collect(gomock.Any()).Return(inspect, nil).AnyTimes()
 
-	init, err := NewInit(c, ami)
-	assert.Nil(t, err)
-	init.srv = &http.Server{}
+	init := genInit(t, c, ami)
+	init.Start()
+	init.srv = &gohttp.Server{}
 	init.Close()
 }
 
-func responseEqual(t *testing.T, resp v1.ActiveResponse, sc config.SyncConfig) {
-	assert.Equal(t, resp.NodeName, sc.Node.Name)
-	assert.Equal(t, resp.Namespace, sc.Node.Namespace)
+func TestNewInit(t *testing.T) {
+	f, err := ioutil.TempFile("", t.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, f)
+	fmt.Println("-->tempfile", f.Name())
 
+	sto, err := store.NewBoltHold(f.Name())
+	assert.NoError(t, err)
+	assert.NotNil(t, sto)
+	// err kube
+	c := &config.Config{}
+	_, err = NewInit(c, sto)
+	assert.Equal(t, os.ErrInvalid, err)
+
+	c.Engine.Kind = "kubernetes"
+	_, err = NewInit(c, sto)
+	assert.NotNil(t, err)
+}
+
+func responseEqual(t *testing.T, resp v1.ActiveResponse, sc coreConfig.SyncConfig) {
 	cert, err := ioutil.ReadFile(sc.Cloud.HTTP.Cert)
 	assert.Nil(t, err)
 	assert.Equal(t, resp.Certificate.Cert, string(cert))

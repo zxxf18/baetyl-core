@@ -2,11 +2,13 @@ package initialize
 
 import (
 	"github.com/baetyl/baetyl-core/ami"
-	"github.com/baetyl/baetyl-core/config"
+	"github.com/baetyl/baetyl-core/initialize/config"
 	"github.com/baetyl/baetyl-go/http"
 	"github.com/baetyl/baetyl-go/log"
 	"github.com/baetyl/baetyl-go/utils"
+	bh "github.com/timshannon/bolthold"
 	gohttp "net/http"
+	"os"
 )
 
 type batch struct {
@@ -29,7 +31,7 @@ type Initialize struct {
 }
 
 // NewInit to activate, success add node info
-func NewInit(cfg *config.Config, ami ami.AMI) (*Initialize, error) {
+func NewInit(cfg *config.Config, sto *bh.Store) (*Initialize, error) {
 	ops, err := cfg.Init.Cloud.HTTP.ToClientOptions()
 	if err != nil {
 		return nil, err
@@ -39,7 +41,6 @@ func NewInit(cfg *config.Config, ami ami.AMI) (*Initialize, error) {
 		sig:   make(chan bool, 1),
 		http:  http.NewClient(ops),
 		attrs: map[string]string{},
-		ami:   ami,
 		log:   log.With(log.Any("core", "Initialize")),
 	}
 	init.batch = &batch{
@@ -51,7 +52,14 @@ func NewInit(cfg *config.Config, ami ami.AMI) (*Initialize, error) {
 	for _, a := range cfg.Init.ActivateConfig.Attributes {
 		init.attrs[a.Name] = a.Value
 	}
-	init.Start()
+	if cfg.Engine.Kind != "kubernetes" {
+		return nil, os.ErrInvalid
+	}
+	kube, err := ami.NewKubeImpl(cfg.Engine.Kubernetes, sto)
+	if err != nil {
+		return nil, err
+	}
+	init.ami = kube
 	return init, nil
 }
 
@@ -63,7 +71,7 @@ func (init *Initialize) Start() {
 			return
 		}
 	} else {
-		err := init.tomb.Go(init.StartServer)
+		err := init.tomb.Go(init.startServer)
 		if err != nil {
 			init.log.Error("init", log.Any("server start err", err))
 		}
@@ -72,7 +80,7 @@ func (init *Initialize) Start() {
 
 func (init *Initialize) Close() {
 	if init.srv != nil {
-		init.CloseServer()
+		init.closeServer()
 	}
 	init.tomb.Kill(nil)
 	init.tomb.Wait()
