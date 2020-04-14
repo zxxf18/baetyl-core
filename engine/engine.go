@@ -15,9 +15,9 @@ import (
 )
 
 type Engine struct {
+	Ami  ami.AMI
 	nod  *node.Node
 	cfg  config.EngineConfig
-	ami  ami.AMI
 	tomb utils.Tomb
 	log  *log.Logger
 	ns   string
@@ -34,7 +34,7 @@ func NewEngine(cfg config.EngineConfig, sto *bh.Store, nod *node.Node) (*Engine,
 	if err != nil {
 		return nil, err
 	}
-	e.ami = kube
+	e.Ami = kube
 	return e, nil
 }
 
@@ -70,7 +70,7 @@ func (e *Engine) reporting() error {
 
 func (e *Engine) reportAndDesireAsync() error {
 	// to collect app status
-	info, err := e.ami.Collect(e.ns)
+	info, err := e.Ami.Collect(e.ns)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func (e *Engine) reportAndDesireAsync() error {
 		apps = append(apps, sysApps...)
 	}
 	e.log.Info("to apply apps", log.Any("apps", apps))
-	return e.ami.Apply(e.ns, apps)
+	return e.Ami.Apply(e.ns, apps)
 }
 
 func (e *Engine) Close() {

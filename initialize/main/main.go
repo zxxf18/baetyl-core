@@ -34,16 +34,6 @@ func NewCore(ctx context.Context) (*core, error) {
 		return nil, err
 	}
 
-	if _, err := os.Stat(cfg.Sync.Cloud.HTTP.Cert); os.IsNotExist(err) {
-		i, err := initialize.NewInit(&cfg, c.sto)
-		if err != nil {
-			i.Close()
-			return nil, err
-		}
-		i.Start()
-		i.WaitAndClose()
-	}
-
 	c.sha, err = node.NewNode(c.sto)
 	if err != nil {
 		c.Close()
@@ -53,6 +43,17 @@ func NewCore(ctx context.Context) (*core, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if _, err := os.Stat(cfg.Sync.Cloud.HTTP.Cert); os.IsNotExist(err) {
+		i, err := initialize.NewInit(&cfg, c.eng.Ami)
+		if err != nil {
+			i.Close()
+			return nil, err
+		}
+		i.Start()
+		i.WaitAndClose()
+	}
+
 	c.syn, err = sync.NewSync(cfg.Sync, c.sto, c.sha)
 	if err != nil {
 		return nil, err

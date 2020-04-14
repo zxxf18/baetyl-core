@@ -117,7 +117,8 @@ func TestServer(t *testing.T) {
 	defer mockCtl.Finish()
 	ami := mc.NewMockAMI(mockCtl)
 
-	init := genInit(t, c, ami)
+	init, err := NewInit(c, ami)
+	assert.Nil(t, err)
 	init.Start()
 
 	w := &httptest.ResponseRecorder{

@@ -6,7 +6,6 @@ import (
 	"github.com/baetyl/baetyl-go/http"
 	"github.com/baetyl/baetyl-go/log"
 	"github.com/baetyl/baetyl-go/utils"
-	bh "github.com/timshannon/bolthold"
 	gohttp "net/http"
 )
 
@@ -30,13 +29,14 @@ type Initialize struct {
 }
 
 // NewInit to activate, success add node info
-func NewInit(cfg *config.Config, sto *bh.Store) (*Initialize, error) {
+func NewInit(cfg *config.Config, ami ami.AMI) (*Initialize, error) {
 	ops, err := cfg.Init.Cloud.HTTP.ToClientOptions()
 	if err != nil {
 		return nil, err
 	}
 	init := &Initialize{
 		cfg:   cfg,
+		ami:   ami,
 		sig:   make(chan bool, 1),
 		http:  http.NewClient(ops),
 		attrs: map[string]string{},
@@ -51,11 +51,6 @@ func NewInit(cfg *config.Config, sto *bh.Store) (*Initialize, error) {
 	for _, a := range cfg.Init.ActivateConfig.Attributes {
 		init.attrs[a.Name] = a.Value
 	}
-	kube, err := ami.GetAMI(cfg.Engine, sto)
-	if err != nil {
-		return nil, err
-	}
-	init.ami = kube
 	return init, nil
 }
 
