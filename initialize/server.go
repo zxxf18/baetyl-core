@@ -1,7 +1,7 @@
 package initialize
 
 import (
-	"github.com/baetyl/baetyl-core/initialize/config"
+	"github.com/baetyl/baetyl-core/config"
 	"github.com/baetyl/baetyl-go/log"
 	"html/template"
 	"net/http"

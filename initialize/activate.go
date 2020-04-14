@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/baetyl/baetyl-go/utils"
 	"io/ioutil"
+	"math/rand"
 	"time"
 
 	"github.com/baetyl/baetyl-go/http"
@@ -20,6 +21,7 @@ func (init *Initialize) activating() error {
 	for {
 		select {
 		case <-t.C:
+			time.Sleep(time.Millisecond * time.Duration(rand.Intn(100)))
 			init.activate()
 		case <-init.tomb.Dying():
 			return nil

@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/baetyl/baetyl-core/config"
 	"github.com/baetyl/baetyl-core/engine"
 	"github.com/baetyl/baetyl-core/initialize"
-	"github.com/baetyl/baetyl-core/initialize/config"
 	"github.com/baetyl/baetyl-core/node"
 	"github.com/baetyl/baetyl-core/store"
 	"github.com/baetyl/baetyl-core/sync"
@@ -74,11 +74,11 @@ func main() {
 		}
 		defer c.Close()
 
-		err = c.syn.Once()
+		err = c.syn.ReportAndDesire()
 		if err != nil {
 			return err
 		}
-		err = c.eng.Once()
+		err = c.eng.ReportAndDesire()
 		if err != nil {
 			return err
 		}

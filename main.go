@@ -41,13 +41,13 @@ func NewCore(ctx context.Context) (*core, error) {
 		c.Close()
 		return nil, err
 	}
-	c.eng.Loop()
+	c.eng.Start()
 	c.syn, err = sync.NewSync(cfg.Sync, c.sto, c.sha)
 	if err != nil {
 		c.Close()
 		return nil, err
 	}
-	c.syn.Loop()
+	c.syn.Start()
 	return c, nil
 }
 

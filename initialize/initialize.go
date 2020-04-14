@@ -2,13 +2,12 @@ package initialize
 
 import (
 	"github.com/baetyl/baetyl-core/ami"
-	"github.com/baetyl/baetyl-core/initialize/config"
+	"github.com/baetyl/baetyl-core/config"
 	"github.com/baetyl/baetyl-go/http"
 	"github.com/baetyl/baetyl-go/log"
 	"github.com/baetyl/baetyl-go/utils"
 	bh "github.com/timshannon/bolthold"
 	gohttp "net/http"
-	"os"
 )
 
 type batch struct {
@@ -52,10 +51,7 @@ func NewInit(cfg *config.Config, sto *bh.Store) (*Initialize, error) {
 	for _, a := range cfg.Init.ActivateConfig.Attributes {
 		init.attrs[a.Name] = a.Value
 	}
-	if cfg.Engine.Kind != "kubernetes" {
-		return nil, os.ErrInvalid
-	}
-	kube, err := ami.NewKubeImpl(cfg.Engine.Kubernetes, sto)
+	kube, err := ami.GetAMI(cfg.Engine, sto)
 	if err != nil {
 		return nil, err
 	}

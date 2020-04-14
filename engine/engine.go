@@ -4,7 +4,6 @@ import (
 	"errors"
 	v1 "github.com/baetyl/baetyl-go/spec/v1"
 	"math/rand"
-	"os"
 	"time"
 
 	"github.com/baetyl/baetyl-core/ami"
@@ -25,29 +24,26 @@ type Engine struct {
 }
 
 func NewEngine(cfg config.EngineConfig, sto *bh.Store, nod *node.Node) (*Engine, error) {
-	if cfg.Kind != "kubernetes" {
-		return nil, os.ErrInvalid
-	}
-	ami, err := ami.NewKubeImpl(cfg.Kubernetes, sto)
-	if err != nil {
-		return nil, err
-	}
 	e := &Engine{
 		nod: nod,
-		ami: ami,
 		cfg: cfg,
 		ns:  "baetyl-edge",
 		log: log.With(log.Any("engine", cfg.Kind)),
 	}
+	kube, err := ami.GetAMI(cfg, sto)
+	if err != nil {
+		return nil, err
+	}
+	e.ami = kube
 	return e, nil
 }
 
-func (e *Engine) Loop() {
+func (e *Engine) Start() {
 	e.tomb.Go(e.reporting)
 }
 
-func (e *Engine) Once() error {
-	return e.report()
+func (e *Engine) ReportAndDesire() error {
+	return e.reportAndDesireAsync()
 }
 
 func (e *Engine) reporting() error {
@@ -60,7 +56,7 @@ func (e *Engine) reporting() error {
 		select {
 		case <-t.C:
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(100)))
-			err := e.report()
+			err := e.reportAndDesireAsync()
 			if err != nil {
 				e.log.Error("failed to report local shadow", log.Error(err))
 			} else {
@@ -72,7 +68,7 @@ func (e *Engine) reporting() error {
 	}
 }
 
-func (e *Engine) report() error {
+func (e *Engine) reportAndDesireAsync() error {
 	// to collect app status
 	info, err := e.ami.Collect(e.ns)
 	if err != nil {
@@ -92,7 +88,7 @@ func (e *Engine) report() error {
 		info["sysapps"] = alignApps(info.SysAppInfos(), no.Desire.SysAppInfos())
 	}
 
-	// to report app status into local shadow, and return shadow delta
+	// to reportAndDesireAsync app status into local shadow, and return shadow delta
 	delta, err := e.nod.Report(info)
 	if err != nil {
 		return err

@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/baetyl/baetyl-core/initialize/config"
+	"github.com/baetyl/baetyl-core/config"
 	v1 "github.com/baetyl/baetyl-go/spec/v1"
 )
 

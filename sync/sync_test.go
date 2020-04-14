@@ -53,7 +53,7 @@ func TestSync_Report(t *testing.T) {
 
 	syn, err := NewSync(sc, sto, nod)
 	assert.NoError(t, err)
-	syn.Loop()
+	syn.Start()
 
 	desire := <-syn.fifo
 	assert.Equal(t, v1.Desire{"apps": map[string]interface{}{"app1": "123"}}, desire)
@@ -77,8 +77,8 @@ func TestSync_Report(t *testing.T) {
 	sc.Cloud.HTTP.InsecureSkipVerify = true
 	syn, err = NewSync(sc, sto, nod)
 	assert.NoError(t, err)
-	syn.Loop()
-	err = syn.report()
+	syn.Start()
+	err = syn.reportAndDesireAsync()
 	assert.Error(t, err)
 
 	ms = mock.NewServer(tlssvr, mock.NewResponse(500, []byte{}))
@@ -92,13 +92,13 @@ func TestSync_Report(t *testing.T) {
 	sc.Cloud.HTTP.InsecureSkipVerify = true
 	syn, err = NewSync(sc, sto, nod)
 	assert.NoError(t, err)
-	syn.Loop()
-	err = syn.report()
+	syn.Start()
+	err = syn.reportAndDesireAsync()
 	assert.Error(t, err)
 	syn.Close()
 }
 
-func TestSync_Once(t *testing.T) {
+func TestSync_ReportAndDesire(t *testing.T) {
 	f, err := ioutil.TempFile("", t.Name())
 	assert.NoError(t, err)
 	assert.NotNil(t, f)
@@ -135,8 +135,8 @@ func TestSync_Once(t *testing.T) {
 
 	syn, err := NewSync(sc, sto, nod)
 	assert.NoError(t, err)
-	err = syn.Once()
+	err = syn.ReportAndDesire()
 	assert.NoError(t, err)
-	err = syn.Once()
+	err = syn.ReportAndDesire()
 	assert.NotNil(t, err)
 }

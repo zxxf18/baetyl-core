@@ -13,8 +13,7 @@ import (
 	"testing"
 	"time"
 
-	coreConfig "github.com/baetyl/baetyl-core/config"
-	"github.com/baetyl/baetyl-core/initialize/config"
+	"github.com/baetyl/baetyl-core/config"
 	mc "github.com/baetyl/baetyl-core/mock"
 	"github.com/baetyl/baetyl-go/http"
 	"github.com/baetyl/baetyl-go/mock"
@@ -154,7 +153,7 @@ func TestInitialize_Activate(t *testing.T) {
 	}
 
 	certPath := "var/lib/baetyl/cert"
-	is := &coreConfig.SyncConfig{}
+	is := &config.SyncConfig{}
 	err = utils.UnmarshalYAML(nil, is)
 	assert.NoError(t, err)
 	is.Cloud.HTTP.Key = path.Join(certPath, "client.key")
@@ -286,7 +285,7 @@ func TestNewInit(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func responseEqual(t *testing.T, resp v1.ActiveResponse, sc coreConfig.SyncConfig) {
+func responseEqual(t *testing.T, resp v1.ActiveResponse, sc config.SyncConfig) {
 	cert, err := ioutil.ReadFile(sc.Cloud.HTTP.Cert)
 	assert.Nil(t, err)
 	assert.Equal(t, resp.Certificate.Cert, string(cert))

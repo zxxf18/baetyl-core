@@ -2,7 +2,7 @@ package initialize
 
 import (
 	"fmt"
-	"github.com/baetyl/baetyl-core/initialize/config"
+	"github.com/baetyl/baetyl-core/config"
 	mc "github.com/baetyl/baetyl-core/mock"
 	v1 "github.com/baetyl/baetyl-go/spec/v1"
 	"github.com/golang/mock/gomock"

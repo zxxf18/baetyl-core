@@ -1,7 +1,7 @@
 package initialize
 
 import (
-	"github.com/baetyl/baetyl-core/initialize/config"
+	"github.com/baetyl/baetyl-core/config"
 	mc "github.com/baetyl/baetyl-core/mock"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"

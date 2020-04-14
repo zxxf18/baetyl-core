@@ -49,7 +49,7 @@ func NewSync(cfg config.SyncConfig, store *bh.Store, nod *node.Node) (*Sync, err
 	return s, nil
 }
 
-func (s *Sync) Loop() {
+func (s *Sync) Start() {
 	s.tomb.Go(s.reporting, s.desiring)
 }
 
@@ -58,8 +58,8 @@ func (s *Sync) Close() {
 	s.tomb.Wait()
 }
 
-func (s *Sync) Once() error {
-	desire, err := s.doReport()
+func (s *Sync) ReportAndDesire() error {
+	desire, err := s.report()
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (s *Sync) reporting() error {
 		select {
 		case <-t.C:
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(100)))
-			err := s.report()
+			err := s.reportAndDesireAsync()
 			if err != nil {
 				s.log.Error("failed to report cloud shadow", log.Error(err))
 			} else {
@@ -101,8 +101,8 @@ func (s *Sync) reporting() error {
 	}
 }
 
-func (s *Sync) report() error {
-	desire, err := s.doReport()
+func (s *Sync) reportAndDesireAsync() error {
+	desire, err := s.report()
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (s *Sync) report() error {
 	return nil
 }
 
-func (s *Sync) doReport() (v1.Desire, error) {
+func (s *Sync) report() (v1.Desire, error) {
 	sd, err := s.nod.Get()
 	if err != nil {
 		return nil, err
