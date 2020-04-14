@@ -8,8 +8,8 @@ import (
 	"github.com/baetyl/baetyl-core/store"
 	"github.com/baetyl/baetyl-core/sync"
 	"github.com/baetyl/baetyl-go/context"
+	"github.com/baetyl/baetyl-go/utils"
 	bh "github.com/timshannon/bolthold"
-	"os"
 )
 
 type core struct {
@@ -44,7 +44,7 @@ func NewCore(ctx context.Context) (*core, error) {
 		return nil, err
 	}
 
-	if _, err := os.Stat(cfg.Sync.Cloud.HTTP.Cert); os.IsNotExist(err) {
+	if !utils.FileExists(cfg.Sync.Cloud.HTTP.Cert) {
 		i, err := initialize.NewInit(&cfg, c.eng.Ami)
 		if err != nil {
 			i.Close()

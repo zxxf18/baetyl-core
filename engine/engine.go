@@ -24,17 +24,17 @@ type Engine struct {
 }
 
 func NewEngine(cfg config.EngineConfig, sto *bh.Store, nod *node.Node) (*Engine, error) {
+	kube, err := ami.GenAMI(cfg, sto)
+	if err != nil {
+		return nil, err
+	}
 	e := &Engine{
+		Ami: kube,
 		nod: nod,
 		cfg: cfg,
 		ns:  "baetyl-edge",
 		log: log.With(log.Any("engine", cfg.Kind)),
 	}
-	kube, err := ami.GetAMI(cfg, sto)
-	if err != nil {
-		return nil, err
-	}
-	e.Ami = kube
 	return e, nil
 }
 
@@ -88,7 +88,7 @@ func (e *Engine) reportAndDesireAsync() error {
 		info["sysapps"] = alignApps(info.SysAppInfos(), no.Desire.SysAppInfos())
 	}
 
-	// to reportAndDesireAsync app status into local shadow, and return shadow delta
+	// to report app status into local shadow, and return shadow delta
 	delta, err := e.nod.Report(info)
 	if err != nil {
 		return err

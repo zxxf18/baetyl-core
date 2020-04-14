@@ -19,7 +19,7 @@ const (
 	Kubernetes = "kubernetes"
 )
 
-func GetAMI(cfg config.EngineConfig, sto *bh.Store) (AMI, error) {
+func GenAMI(cfg config.EngineConfig, sto *bh.Store) (AMI, error) {
 	switch cfg.Kind {
 	case Kubernetes:
 		return newKubeImpl(cfg.Kubernetes, sto)
