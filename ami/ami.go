@@ -27,3 +27,16 @@ func GenAMI(cfg config.EngineConfig, sto *bh.Store) (AMI, error) {
 		return nil, os.ErrInvalid
 	}
 }
+
+const (
+	Kubernetes = "kubernetes"
+)
+
+func GenAMI(cfg config.EngineConfig, sto *bh.Store) (AMI, error) {
+	switch cfg.Kind {
+	case Kubernetes:
+		return newKubeImpl(cfg.Kubernetes, sto)
+	default:
+		return nil, os.ErrInvalid
+	}
+}
